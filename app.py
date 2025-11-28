@@ -2,20 +2,13 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 
-# =========================================================
-# MUST BE FIRST STREAMLIT COMMAND
-# =========================================================
+# ----------------------------
+# LOAD DATA
+# ----------------------------
+DATA_PATH = r"prepared_batter_entry_dataset_with_expected_avg.csv"
+df = pd.read_csv(DATA_PATH)
+
 st.set_page_config(page_title="Test Batter Performance Judge", layout="wide")
-
-# ----------------------------
-# FAST CACHED DATA LOADER
-# ----------------------------
-@st.cache_data(show_spinner=False)
-def load_data():
-    return pd.read_csv("prepared_batter_entry_dataset_with_expected_avg.csv")
-
-df = load_data()
-
 st.title("Test Batter Performance Judge")
 
 # =========================================================
@@ -30,26 +23,27 @@ year_range = st.sidebar.slider(
     "Select Year Range",
     min_value=year_min,
     max_value=year_max,
-    value=(year_min, year_max)
+    value=(year_min, year_max),
+    key="global_year_range"
 )
 
 # ---- 2. Batters ----
 batters = sorted(df['bat'].unique())
-batter_filter = st.sidebar.multiselect("Batters", batters)
+batter_filter = st.sidebar.multiselect("Batters", batters, key="global_batters")
 
 # ---- 3. Opponents ----
 opponents = sorted(df['opponent'].unique())
-opponent_filter = st.sidebar.multiselect("Opponents", opponents)
+opponent_filter = st.sidebar.multiselect("Opponents", opponents, key="global_opp")
 
 # ---- 4. Countries ----
 countries = sorted(df['country'].unique())
-country_filter = st.sidebar.multiselect("Host Countries", countries)
+country_filter = st.sidebar.multiselect("Host Countries", countries, key="global_country")
 
 # ---- 5. Innings Number ----
 innings_nums = sorted(df['inns_num'].unique())
-inns_filter = st.sidebar.multiselect("Innings Number", innings_nums)
+inns_filter = st.sidebar.multiselect("Innings Number", innings_nums, key="global_inns")
 
-# ---- 6. Position ----
+# ---- 6. Position ---- (global)
 position_map = {
     "Opener": 0,
     "Number 3": 1,
@@ -64,10 +58,11 @@ position_map = {
 }
 position_choice = st.sidebar.selectbox(
     "Batting Position (based on wickets fallen)",
-    ["All Positions"] + list(position_map.keys())
+    ["All Positions"] + list(position_map.keys()),
+    key="global_position"
 )
 
-# ---- 7. Ranking Filters ----
+# ---- 7. Ranking Filters Section ----
 st.sidebar.markdown("---")
 st.sidebar.subheader("Ranking Filters")
 
@@ -76,27 +71,34 @@ min_total_runs = st.sidebar.number_input(
     min_value=0,
     max_value=20000,
     value=5000,
-    step=100
+    step=100,
+    key="rank_minruns"
 )
 
 rank_mapping_country = st.sidebar.multiselect(
-    "Host Country (for Rankings)",
+    "Host Country (Rankings)",
     sorted(df["country"].unique()),
+    key="rank_country"
 )
 
 rank_mapping_opponent = st.sidebar.multiselect(
-    "Opponent (for Rankings)",
+    "Opponent (Rankings)",
     sorted(df["opponent"].unique()),
+    key="rank_opp"
 )
 
-rank_mapping_pos = st.sidebar.multiselect(
-    "Batting Position (for Rankings)",
-    sorted(df["wickets_when_in"].unique()),
+# --- position filter same as global
+rank_pos_strings = st.sidebar.multiselect(
+    "Batting Position (Rankings)",
+    list(position_map.keys()),
+    key="rank_pos"
 )
+rank_mapping_pos = [position_map[p] for p in rank_pos_strings]
 
 rank_mapping_inns = st.sidebar.multiselect(
-    "Innings Number (for Rankings)",
+    "Innings Number (Rankings)",
     sorted(df["inns_num"].unique()),
+    key="rank_inns"
 )
 
 rank_year_range = st.sidebar.slider(
@@ -104,6 +106,7 @@ rank_year_range = st.sidebar.slider(
     min_value=year_min,
     max_value=year_max,
     value=(year_min, year_max),
+    key="rank_year_range"
 )
 
 rank_basis = st.sidebar.selectbox(
@@ -111,189 +114,157 @@ rank_basis = st.sidebar.selectbox(
     [
         "Performance Factor (total actual runs / total expected runs)",
         "Consistency Factor (good innings / bad innings)"
-    ]
+    ],
+    key="rank_basis"
 )
 
 # =========================================================
-#                       APPLY GLOBAL FILTERS
-# =========================================================
-filtered = df.copy()
-
-filtered = filtered[
-    (filtered['year'] >= year_range[0]) &
-    (filtered['year'] <= year_range[1])
-]
-
-if batter_filter:
-    filtered = filtered[filtered['bat'].isin(batter_filter)]
-
-if opponent_filter:
-    filtered = filtered[filtered['opponent'].isin(opponent_filter)]
-
-if country_filter:
-    filtered = filtered[filtered['country'].isin(country_filter)]
-
-if inns_filter:
-    filtered = filtered[filtered['inns_num'].isin(inns_filter)]
-
-if position_choice != "All Positions":
-    wicket_val = position_map[position_choice]
-    filtered = filtered[filtered['wickets_when_in'] == wicket_val]
-
-# Identify actual runs column
-if 'actual_runs' in filtered.columns:
-    actual_col = 'actual_runs'
-elif 'y' in filtered.columns:
-    actual_col = 'y'
-elif 'runs' in filtered.columns:
-    actual_col = 'runs'
-else:
-    possible = [c for c in filtered.columns if 'run' in c.lower()]
-    actual_col = possible[0] if possible else None
-
-# =========================================================
-#                        TABS
+#                          TABS
 # =========================================================
 tab1, tab2 = st.tabs(["Batter Summary", "Rankings"])
 
 # =========================================================
-#                       TAB 1
+#                         TAB 1
 # =========================================================
 with tab1:
+    if st.button("Generate Summary Results"):
+        filtered = df.copy()
+        filtered = filtered[
+            (filtered['year'] >= year_range[0]) &
+            (filtered['year'] <= year_range[1])
+        ]
 
-    if filtered.empty:
-        st.warning("No data matches the filters.")
-    else:
+        if batter_filter:
+            filtered = filtered[filtered['bat'].isin(batter_filter)]
+        if opponent_filter:
+            filtered = filtered[filtered['opponent'].isin(opponent_filter)]
+        if country_filter:
+            filtered = filtered[filtered['country'].isin(country_filter)]
+        if inns_filter:
+            filtered = filtered[filtered['inns_num'].isin(inns_filter)]
 
-        avg_actual = filtered[actual_col].mean()
-        avg_pred = filtered['expected_avg'].mean()
+        if position_choice != "All Positions":
+            wicket_val = position_map[position_choice]
+            filtered = filtered[filtered['wickets_when_in'] == wicket_val]
 
-        good_innings = (filtered[actual_col] > filtered['expected_avg']).sum()
-        bad_innings = (filtered[actual_col] <= filtered['expected_avg']).sum()
-
-        diff = avg_actual - avg_pred
-
-        st.subheader("Summary")
-        c1, c2, c3, c4 = st.columns([2, 2, 1.5, 2])
-        c1.metric("Actual runs / innings", f"{avg_actual:.2f}")
-        c2.metric("Predicted runs / innings", f"{avg_pred:.2f}")
-        c3.metric("Good innings", int(good_innings))
-        c4.metric("Bad innings", int(bad_innings))
-
-        if diff > 0:
-            st.success(f"Player is UP by +{diff:.2f} runs per innings")
-        elif diff < 0:
-            st.error(f"Player is DOWN by {abs(diff):.2f} runs per innings")
+        # Actual runs column
+        if 'actual_runs' in filtered.columns:
+            actual_col = 'actual_runs'
+        elif 'y' in filtered.columns:
+            actual_col = 'y'
+        elif 'runs' in filtered.columns:
+            actual_col = 'runs'
         else:
-            st.info("Performance is exactly on expected baseline.")
+            possible = [c for c in filtered.columns if 'run' in c.lower()]
+            actual_col = possible[0]
 
-        st.markdown("---")
-        chart_src = filtered[[actual_col, 'expected_avg', 'year']].copy()
-        chart_src.rename(columns={actual_col: 'actual'}, inplace=True)
+        if filtered.empty:
+            st.warning("No data matches the filters.")
+        else:
+            avg_actual = filtered[actual_col].mean()
+            avg_pred = filtered['expected_avg'].mean()
+            good_innings = (filtered[actual_col] > filtered['expected_avg']).sum()
+            bad_innings = (filtered[actual_col] <= filtered['expected_avg']).sum()
+            diff = avg_actual - avg_pred
 
-        year_agg = chart_src.groupby("year").mean().reset_index()
-        melt_df = pd.melt(
-            year_agg,
-            id_vars=["year"],
-            value_vars=["actual", "expected_avg"],
-            var_name="type",
-            value_name="avg_runs"
-        )
-        melt_df['type'] = melt_df['type'].replace({"expected_avg": "predicted"})
+            st.subheader("Summary")
+            c1, c2, c3, c4 = st.columns([2, 2, 1.5, 2])
+            c1.metric("Actual runs / innings", f"{avg_actual:.2f}")
+            c2.metric("Predicted runs / innings", f"{avg_pred:.2f}")
+            c3.metric("Good innings", int(good_innings))
+            c4.metric("Bad innings", int(bad_innings))
 
-        bar = alt.Chart(melt_df).mark_bar().encode(
-            x='year:O',
-            xOffset='type:N',
-            y='avg_runs:Q',
-            color='type:N',
-            tooltip=['year', 'type', 'avg_runs']
-        ).properties(title="Actual vs Predicted Runs per Innings (Yearly)")
+            # Yearly chart
+            st.markdown("---")
+            chart_src = filtered[[actual_col, 'expected_avg', 'year']].copy()
+            chart_src.rename(columns={actual_col: 'actual'}, inplace=True)
+            year_agg = chart_src.groupby("year").mean().reset_index()
 
-        st.altair_chart(bar, use_container_width=True)
+            melt_df = pd.melt(
+                year_agg,
+                id_vars=["year"],
+                value_vars=["actual", "expected_avg"],
+                var_name="type",
+                value_name="avg_runs"
+            ).replace({"expected_avg": "predicted"})
 
-        with st.expander("Show Filtered Data"):
-            st.dataframe(filtered)
+            color_scale = alt.Scale(
+                domain=["actual", "predicted"],
+                range=["#2ecc71", "#3498db"]
+            )
+
+            bar = alt.Chart(melt_df).mark_bar().encode(
+                x='year:O',
+                xOffset='type:N',
+                y='avg_runs:Q',
+                color=alt.Color('type:N', scale=color_scale),
+                tooltip=['year', 'type', 'avg_runs']
+            ).properties(title="Actual vs Predicted Runs per Innings (Yearly)")
+
+            st.altair_chart(bar, use_container_width=True)
+            with st.expander("Show Filtered Data"):
+                st.dataframe(filtered)
 
 # =========================================================
-#                   TAB 2 — RANKINGS (CACHED)
+#                         TAB 2 — RANKINGS
 # =========================================================
-
-@st.cache_data(show_spinner=False)
-def compute_rankings(df, year_range, ctry, opp, pos, inns):
-    rdf = df.copy()
-    rdf = rdf[
-        (rdf["year"] >= year_range[0]) &
-        (rdf["year"] <= year_range[1])
-    ]
-    if ctry:
-        rdf = rdf[rdf["country"].isin(ctry)]
-    if opp:
-        rdf = rdf[rdf["opponent"].isin(opp)]
-    if pos:
-        rdf = rdf[rdf["wickets_when_in"].isin(pos)]
-    if inns:
-        rdf = rdf[rdf["inns_num"].isin(inns)]
-
-    if "actual_runs" in rdf.columns:
-        ac = "actual_runs"
-    elif "y" in rdf.columns:
-        ac = "y"
-    else:
-        ac = [c for c in rdf.columns if "run" in c.lower()][0]
-
-    rdf["good_flag"] = (rdf[ac] > rdf["expected_avg"]).astype(int)
-    rdf["bad_flag"] = (rdf[ac] <= rdf["expected_avg"]).astype(int)
-
-    rank_table = (
-        rdf.groupby("bat")
-        .agg(
-            total_actual_runs=(ac, "sum"),
-            total_expected_runs=("expected_avg", "sum"),
-            good_innings=("good_flag", "sum"),
-            bad_innings=("bad_flag", "sum")
-        ).reset_index()
-    )
-
-    rank_table["total_expected_runs"] = (
-        rank_table["total_expected_runs"].round(0).astype(int)
-    )
-
-    return rank_table
-
-
 with tab2:
+    if st.button("Generate Rankings"):
+        rdf = df.copy()
+        rdf = rdf[
+            (rdf['year'] >= rank_year_range[0]) &
+            (rdf['year'] <= rank_year_range[1])
+        ]
 
-    st.header("Batter Rankings")
+        if rank_mapping_country:
+            rdf = rdf[rdf["country"].isin(rank_mapping_country)]
+        if rank_mapping_opponent:
+            rdf = rdf[rdf["opponent"].isin(rank_mapping_opponent)]
+        if rank_mapping_pos:
+            rdf = rdf[rdf["wickets_when_in"].isin(rank_mapping_pos)]
+        if rank_mapping_inns:
+            rdf = rdf[rdf["inns_num"].isin(rank_mapping_inns)]
 
-    rank_table = compute_rankings(
-        df,
-        rank_year_range,
-        rank_mapping_country,
-        rank_mapping_opponent,
-        rank_mapping_pos,
-        rank_mapping_inns
-    )
+        if 'actual_runs' in rdf.columns:
+            actual_col_r = 'actual_runs'
+        elif 'y' in rdf.columns:
+            actual_col_r = 'y'
+        else:
+            actual_col_r = [c for c in rdf.columns if 'run' in c.lower()][0]
 
-    rank_table = rank_table[rank_table["total_actual_runs"] >= min_total_runs]
+        rdf["good_flag"] = (rdf[actual_col_r] > rdf["expected_avg"]).astype(int)
+        rdf["bad_flag"] = (rdf[actual_col_r] <= rdf["expected_avg"]).astype(int)
 
-    rank_table["performance_factor"] = (
-        rank_table["total_actual_runs"] /
-        rank_table["total_expected_runs"]
-    ).round(3)
+        rank_table = (
+            rdf.groupby("bat")
+            .agg(
+                total_actual_runs=(actual_col_r, "sum"),
+                total_expected_runs=("expected_avg", "sum"),
+                good_innings=("good_flag", "sum"),
+                bad_innings=("bad_flag", "sum")
+            ).reset_index()
+        )
 
-    rank_table["consistency_factor"] = rank_table.apply(
-        lambda r: round(r["good_innings"] / r["bad_innings"], 3)
-        if r["bad_innings"] > 0 else float("inf"),
-        axis=1
-    )
+        rank_table["total_expected_runs"] = rank_table["total_expected_runs"].round(0).astype(int)
+        rank_table = rank_table[rank_table["total_actual_runs"] >= min_total_runs]
 
-    if rank_basis.startswith("Performance"):
-        rank_table = rank_table.sort_values("performance_factor", ascending=False)
-    else:
-        rank_table = rank_table.sort_values("consistency_factor", ascending=False)
+        rank_table["performance_factor"] = (
+            rank_table["total_actual_runs"] /
+            rank_table["total_expected_runs"]
+        ).round(3)
 
-    if rank_table.empty:
-        st.warning("No player matches the ranking filters.")
-    else:
-        st.dataframe(rank_table.reset_index(drop=True))
+        rank_table["consistency_factor"] = rank_table.apply(
+            lambda r: round(r["good_innings"] / r["bad_innings"], 3)
+            if r["bad_innings"] > 0 else float("inf"),
+            axis=1
+        )
 
+        if rank_basis.startswith("Performance"):
+            rank_table = rank_table.sort_values("performance_factor", ascending=False)
+        else:
+            rank_table = rank_table.sort_values("consistency_factor", ascending=False)
+
+        if rank_table.empty:
+            st.warning("No player matches the ranking filters.")
+        else:
+            st.dataframe(rank_table.reset_index(drop=True))
