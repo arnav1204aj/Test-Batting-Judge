@@ -15,7 +15,7 @@ st.title("Test Batter Performance Judge")
 # =========================================================
 #                GLOBAL SIDEBAR (common for both tabs)
 # =========================================================
-st.sidebar.header("Global Filters")
+st.sidebar.header("Summary Filters")
 
 # ---- 1. Year Range ----
 year_min = int(df['year'].min())
