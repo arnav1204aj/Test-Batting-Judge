@@ -8,6 +8,7 @@ import altair as alt
 DATA_PATH = r"prepared_batter_entry_dataset_with_expected_avg.csv"
 df = pd.read_csv(DATA_PATH)
 
+# Set page config
 st.set_page_config(page_title="Test Batter Performance Judge", layout="wide")
 st.title("Test Batter Performance Judge")
 
@@ -75,6 +76,7 @@ min_total_runs = st.sidebar.number_input(
     key="rank_minruns"
 )
 
+# Ranking filter selections
 rank_mapping_country = st.sidebar.multiselect(
     "Host Country (Rankings)",
     sorted(df["country"].unique()),
@@ -87,7 +89,7 @@ rank_mapping_opponent = st.sidebar.multiselect(
     key="rank_opp"
 )
 
-# --- position filter same as global
+# Ranking position filter uses same mapping as global
 rank_pos_strings = st.sidebar.multiselect(
     "Batting Position (Rankings)",
     list(position_map.keys()),
@@ -121,19 +123,21 @@ rank_basis = st.sidebar.selectbox(
 # =========================================================
 #                          TABS
 # =========================================================
-tab1, tab2 = st.tabs(["Batter Summary", "Rankings"])
+tab1, tab2, tab3 = st.tabs(["Batter Summary", "Rankings", "Info"])
 
 # =========================================================
-#                         TAB 1
+#                         TAB 1 — SUMMARY
 # =========================================================
 with tab1:
+    # Button to trigger summary generation
     if st.button("Generate Summary Results"):
+        
+        # Copy dataframe and apply global filters
         filtered = df.copy()
         filtered = filtered[
             (filtered['year'] >= year_range[0]) &
             (filtered['year'] <= year_range[1])
         ]
-
         if batter_filter:
             filtered = filtered[filtered['bat'].isin(batter_filter)]
         if opponent_filter:
@@ -142,12 +146,11 @@ with tab1:
             filtered = filtered[filtered['country'].isin(country_filter)]
         if inns_filter:
             filtered = filtered[filtered['inns_num'].isin(inns_filter)]
-
         if position_choice != "All Positions":
             wicket_val = position_map[position_choice]
             filtered = filtered[filtered['wickets_when_in'] == wicket_val]
 
-        # Actual runs column
+        # Determine actual runs column dynamically
         if 'actual_runs' in filtered.columns:
             actual_col = 'actual_runs'
         elif 'y' in filtered.columns:
@@ -161,12 +164,14 @@ with tab1:
         if filtered.empty:
             st.warning("No data matches the filters.")
         else:
+            # Compute averages and counts
             avg_actual = filtered[actual_col].mean()
             avg_pred = filtered['expected_avg'].mean()
             good_innings = (filtered[actual_col] > filtered['expected_avg']).sum()
             bad_innings = (filtered[actual_col] <= filtered['expected_avg']).sum()
             diff = avg_actual - avg_pred
 
+            # Display KPIs
             st.subheader("Summary")
             c1, c2, c3, c4 = st.columns([2, 2, 1.5, 2])
             c1.metric("Actual runs / innings", f"{avg_actual:.2f}")
@@ -174,12 +179,23 @@ with tab1:
             c3.metric("Good innings", int(good_innings))
             c4.metric("Bad innings", int(bad_innings))
 
-            # Yearly chart
+            # Performance message
+            if diff > 0:
+                st.success(f"Player is UP by +{diff:.2f} runs per innings")
+            elif diff < 0:
+                st.error(f"Player is DOWN by {abs(diff):.2f} runs per innings")
+            else:
+                st.info("Performance is exactly on expected baseline.")
+
+            # ----------------------------
+            # Year-by-year bar chart
+            # ----------------------------
             st.markdown("---")
             chart_src = filtered[[actual_col, 'expected_avg', 'year']].copy()
             chart_src.rename(columns={actual_col: 'actual'}, inplace=True)
             year_agg = chart_src.groupby("year").mean().reset_index()
 
+            # Melt for altair plotting
             melt_df = pd.melt(
                 year_agg,
                 id_vars=["year"],
@@ -188,10 +204,8 @@ with tab1:
                 value_name="avg_runs"
             ).replace({"expected_avg": "predicted"})
 
-            color_scale = alt.Scale(
-                domain=["actual", "predicted"],
-                range=["#2ecc71", "#3498db"]
-            )
+            # Define colors: actual = green, predicted = blue
+            color_scale = alt.Scale(domain=["actual", "predicted"], range=["#2ecc71", "#3498db"])
 
             bar = alt.Chart(melt_df).mark_bar().encode(
                 x='year:O',
@@ -202,6 +216,8 @@ with tab1:
             ).properties(title="Actual vs Predicted Runs per Innings (Yearly)")
 
             st.altair_chart(bar, use_container_width=True)
+
+            # Expander to show filtered dataframe
             with st.expander("Show Filtered Data"):
                 st.dataframe(filtered)
 
@@ -209,13 +225,14 @@ with tab1:
 #                         TAB 2 — RANKINGS
 # =========================================================
 with tab2:
+    # Button to trigger ranking generation
     if st.button("Generate Rankings"):
+        # Copy dataframe and apply ranking filters
         rdf = df.copy()
         rdf = rdf[
             (rdf['year'] >= rank_year_range[0]) &
             (rdf['year'] <= rank_year_range[1])
         ]
-
         if rank_mapping_country:
             rdf = rdf[rdf["country"].isin(rank_mapping_country)]
         if rank_mapping_opponent:
@@ -225,6 +242,7 @@ with tab2:
         if rank_mapping_inns:
             rdf = rdf[rdf["inns_num"].isin(rank_mapping_inns)]
 
+        # Actual runs column
         if 'actual_runs' in rdf.columns:
             actual_col_r = 'actual_runs'
         elif 'y' in rdf.columns:
@@ -232,9 +250,11 @@ with tab2:
         else:
             actual_col_r = [c for c in rdf.columns if 'run' in c.lower()][0]
 
+        # Compute good and bad innings flags
         rdf["good_flag"] = (rdf[actual_col_r] > rdf["expected_avg"]).astype(int)
         rdf["bad_flag"] = (rdf[actual_col_r] <= rdf["expected_avg"]).astype(int)
 
+        # Aggregate rankings
         rank_table = (
             rdf.groupby("bat")
             .agg(
@@ -245,9 +265,11 @@ with tab2:
             ).reset_index()
         )
 
+        # Apply minimum total runs filter
         rank_table["total_expected_runs"] = rank_table["total_expected_runs"].round(0).astype(int)
         rank_table = rank_table[rank_table["total_actual_runs"] >= min_total_runs]
 
+        # Compute ranking metrics
         rank_table["performance_factor"] = (
             rank_table["total_actual_runs"] /
             rank_table["total_expected_runs"]
@@ -259,6 +281,7 @@ with tab2:
             axis=1
         )
 
+        # Sort by chosen ranking basis
         if rank_basis.startswith("Performance"):
             rank_table = rank_table.sort_values("performance_factor", ascending=False)
         else:
@@ -268,3 +291,39 @@ with tab2:
             st.warning("No player matches the ranking filters.")
         else:
             st.dataframe(rank_table.reset_index(drop=True))
+
+with tab3:
+    st.header("About the Model and Metrics")
+
+    st.markdown("""
+    ### Key Notes:
+    - **Runs per innings ≠ batting average**. RPI does not treat outs and not outs differently.
+    - **Good innings** = actual runs > predicted runs
+    - **Bad innings** = actual runs ≤ predicted runs
+    - **Data coverage**: Past 25 years of international Test cricket till the WTC 2025 Final.
+    - **Performance Factor** = total actual runs / total predicted runs
+    - **Consistency Factor** = good innings / bad innings
+                
+    ### Contextual Notes:
+    - It’s impossible for a human mind to consider and evaluate all factors affecting a Test match knock simultaneously.
+    - Even judging batters within the same generation is difficult, let alone across eras.
+    - ML helps provide a more context-aware evaluation by comparing actual runs with the model’s expected runs.            
+
+    ### Model Features:
+    - Opponent
+    - Host country
+    - Score when the batter came in (runs and wickets)
+    - Year
+    - Innings number
+    - Average runs of the previous innings of the match
+    - Team's previous-innings runs
+    - Opponent's previous-innings runs
+    - Over number
+    - Average innings score of the past year in the country
+
+    The features are fed to a **CatBoostRegressor**, with runs scored by the batter as the target variable. This model is used primarily because it handles non-linear relationships well.
+
+    
+    """)
+
+
