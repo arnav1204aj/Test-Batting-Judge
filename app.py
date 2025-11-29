@@ -63,9 +63,10 @@ position_map = {
     "Number 10": 8,
     "Number 11": 9,
 }
-position_choice = st.sidebar.selectbox(
+# allow selecting multiple positions for the summary filters (empty == all positions)
+position_choices = st.sidebar.multiselect(
     "Batting Position (based on wickets fallen)",
-    ["All Positions"] + list(position_map.keys()),
+    list(position_map.keys()),
     key="global_position"
 )
 
@@ -163,9 +164,9 @@ with tab1:
             filtered = filtered[filtered['country'].isin(country_filter)]
         if inns_filter:
             filtered = filtered[filtered['inns_num'].isin(inns_filter)]
-        if position_choice != "All Positions":
-            wicket_val = position_map[position_choice]
-            filtered = filtered[filtered['wickets_when_in'] == wicket_val]
+        if position_choices:
+            wicket_vals = [position_map[p] for p in position_choices]
+            filtered = filtered[filtered['wickets_when_in'].isin(wicket_vals)]
 
         # Determine actual runs column dynamically
         if 'actual_runs' in filtered.columns:
