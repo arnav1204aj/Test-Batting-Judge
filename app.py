@@ -40,6 +40,12 @@ opponent_filter = st.sidebar.multiselect("Opponents", opponents, key="global_opp
 countries = sorted(df['country'].unique())
 country_filter = st.sidebar.multiselect("Host Countries", countries, key="global_country")
 
+# ---- 4b. Batting team (team_bat) ----
+batting_teams = []
+if 'team_bat' in df.columns:
+    batting_teams = sorted(df['team_bat'].unique())
+batting_team_filter = st.sidebar.multiselect("Batting Team", batting_teams, key="global_batting_team")
+
 # ---- 5. Innings Number ----
 innings_nums = sorted(df['inns_num'].unique())
 inns_filter = st.sidebar.multiselect("Innings Number", innings_nums, key="global_inns")
@@ -87,6 +93,13 @@ rank_mapping_opponent = st.sidebar.multiselect(
     "Opponent (Rankings)",
     sorted(df["opponent"].unique()),
     key="rank_opp"
+)
+
+# Ranking batting team filter
+rank_mapping_batting_team = st.sidebar.multiselect(
+    "Batting Team (Rankings)",
+    sorted(df["team_bat"].unique()) if 'team_bat' in df.columns else [],
+    key="rank_batting_team"
 )
 
 # Ranking position filter uses same mapping as global
@@ -140,6 +153,10 @@ with tab1:
         ]
         if batter_filter:
             filtered = filtered[filtered['bat'].isin(batter_filter)]
+        # apply batting team filter (if present in data)
+        if batting_team_filter:
+            if 'team_bat' in filtered.columns:
+                filtered = filtered[filtered['team_bat'].isin(batting_team_filter)]
         if opponent_filter:
             filtered = filtered[filtered['opponent'].isin(opponent_filter)]
         if country_filter:
@@ -225,6 +242,9 @@ with tab1:
 #                         TAB 2 — RANKINGS
 # =========================================================
 with tab2:
+    # Show a short tip about how to rank for a specific series
+    st.info("Tip: To see matches between two countries, add both in the batting team and opponent filter. This helps generate rankings for a particular bilateral series.")
+
     # Button to trigger ranking generation
     if st.button("Generate Rankings"):
         # Copy dataframe and apply ranking filters
@@ -239,6 +259,9 @@ with tab2:
             rdf = rdf[rdf["opponent"].isin(rank_mapping_opponent)]
         if rank_mapping_pos:
             rdf = rdf[rdf["wickets_when_in"].isin(rank_mapping_pos)]
+        if rank_mapping_batting_team:
+            if 'team_bat' in rdf.columns:
+                rdf = rdf[rdf["team_bat"].isin(rank_mapping_batting_team)]
         if rank_mapping_inns:
             rdf = rdf[rdf["inns_num"].isin(rank_mapping_inns)]
 
