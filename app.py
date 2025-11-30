@@ -70,6 +70,19 @@ position_choices = st.sidebar.multiselect(
     key="global_position"
 )
 
+# ---- 8. Conditional difficulty (summary) ----
+# Labelled in the UI as expected_RPI but maps to the `expected_avg` column in the data
+difficulty_options = [
+    "hard (expected_RPI<30)",
+    "moderate (30<=expected_RPI<50)",
+    "easy (50<=expected_RPI)"
+]
+difficulty_choices = st.sidebar.multiselect(
+    "Conditional difficulty",
+    difficulty_options,
+    key="global_difficulty"
+)
+
 # ---- 7. Ranking Filters Section ----
 st.sidebar.markdown("---")
 st.sidebar.subheader("Ranking Filters")
@@ -115,6 +128,13 @@ rank_mapping_inns = st.sidebar.multiselect(
     "Innings Number (Rankings)",
     sorted(df["inns_num"].unique()),
     key="rank_inns"
+)
+
+# ---- Ranking conditional difficulty ----
+rank_mapping_difficulty = st.sidebar.multiselect(
+    "Conditional difficulty (Rankings)",
+    difficulty_options,
+    key="rank_difficulty"
 )
 
 rank_year_range = st.sidebar.slider(
@@ -167,6 +187,21 @@ with tab1:
         if position_choices:
             wicket_vals = [position_map[p] for p in position_choices]
             filtered = filtered[filtered['wickets_when_in'].isin(wicket_vals)]
+
+        # ---- apply summary conditional difficulty filter (expected_RPI → expected_avg)
+        if difficulty_choices:
+            if 'expected_avg' in filtered.columns:
+                mask = pd.Series(False, index=filtered.index)
+                lower_choices = [c.lower() for c in difficulty_choices]
+                if any('hard' in c for c in lower_choices):
+                    mask |= (filtered['expected_avg'] < 30)
+                if any('moderate' in c for c in lower_choices):
+                    mask |= ((filtered['expected_avg'] >= 30) & (filtered['expected_avg'] < 50))
+                if any('easy' in c for c in lower_choices):
+                    mask |= (filtered['expected_avg'] >= 50)
+                filtered = filtered[mask]
+            else:
+                st.warning("'expected_avg' column not found — conditional difficulty filtering (expected_RPI) will be skipped.")
 
         # Determine actual runs column dynamically
         if 'actual_runs' in filtered.columns:
@@ -266,6 +301,20 @@ with tab2:
         if rank_mapping_inns:
             rdf = rdf[rdf["inns_num"].isin(rank_mapping_inns)]
 
+        # ---- apply rankings conditional difficulty filter (expected_RPI -> expected_avg)
+        if rank_mapping_difficulty:
+            if 'expected_avg' in rdf.columns:
+                lower_choices_r = [c.lower() for c in rank_mapping_difficulty]
+                mask_r = pd.Series(False, index=rdf.index)
+                if any('hard' in c for c in lower_choices_r):
+                    mask_r |= (rdf['expected_avg'] < 30)
+                if any('moderate' in c for c in lower_choices_r):
+                    mask_r |= ((rdf['expected_avg'] >= 30) & (rdf['expected_avg'] < 50))
+                if any('easy' in c for c in lower_choices_r):
+                    mask_r |= (rdf['expected_avg'] >= 50)
+                rdf = rdf[mask_r]
+            else:
+                st.warning("'expected_avg' column not found — conditional difficulty filtering (expected_RPI) will be skipped for rankings.")
         # Actual runs column
         if 'actual_runs' in rdf.columns:
             actual_col_r = 'actual_runs'
@@ -325,8 +374,10 @@ with tab3:
     - **Good innings** = actual runs > predicted runs
     - **Bad innings** = actual runs ≤ predicted runs
     - **Data coverage**: Past 25 years of international Test cricket till the WTC 2025 Final.
-    - **Performance Factor** = total actual runs / total predicted runs
-    - **Consistency Factor** = good innings / bad innings
+        - **Performance Factor** = total actual runs / total predicted runs
+        - **Consistency Factor** = good innings / bad innings
+        - **expected_RPI** in the UI maps to the `expected_avg` column in the dataset —
+            it's the model's expected runs per innings for the batter in that entry.
                 
     ### Contextual Notes:
     - It’s impossible for a human mind to consider and evaluate all factors affecting a Test match knock simultaneously.
