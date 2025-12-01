@@ -373,7 +373,7 @@ with tab3:
     - **Runs per innings ≠ batting average**. RPI does not treat outs and not outs differently.
     - **Good innings** = actual runs > predicted runs
     - **Bad innings** = actual runs ≤ predicted runs
-    - **Data coverage**: Past 25 years of international Test cricket till the WTC 2025 Final.
+    - **Data coverage**: Past 25 years of international Test cricket (2001-2025).
         - **Performance Factor** = total actual runs / total predicted runs
         - **Consistency Factor** = good innings / bad innings
         - **expected_RPI** in the UI maps to the `expected_avg` column in the dataset —
