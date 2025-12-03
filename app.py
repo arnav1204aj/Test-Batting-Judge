@@ -378,6 +378,8 @@ with tab3:
         - **Consistency Factor** = good innings / bad innings
         - **expected_RPI** in the UI maps to the `expected_avg` column in the dataset —
             it's the model's expected runs per innings for the batter in that entry.
+    
+    - Read more: [Context is King — Substack](https://arnavj.substack.com/p/context-is-king)
                 
     ### Contextual Notes:
     - It’s impossible for a human mind to consider and evaluate all factors affecting a Test match knock simultaneously.
