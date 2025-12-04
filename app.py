@@ -15,149 +15,235 @@ st.title("Test Batter Performance Judge")
 # =========================================================
 #                GLOBAL SIDEBAR (common for both tabs)
 # =========================================================
-st.sidebar.header("Summary Filters")
+# =========================================================
+#                SIDEBAR MODE SELECTOR
+# =========================================================
+st.sidebar.header("Select View Mode")
+mode = st.sidebar.radio(
+    "Choose what you want to analyse:",
+    ["Summary", "Rankings", "Comparison"],
+    index=0
+)
 
-# ---- 1. Year Range ----
+
+# =========================================================
+#                COMMON FILTER STRUCTURE
+# =========================================================
 year_min = int(df['year'].min())
 year_max = int(df['year'].max())
-year_range = st.sidebar.slider(
-    "Select Year Range",
-    min_value=year_min,
-    max_value=year_max,
-    value=(year_min, year_max),
-    key="global_year_range"
-)
-
-# ---- 2. Batters ----
 batters = sorted(df['bat'].unique())
-batter_filter = st.sidebar.multiselect("Batters", batters, key="global_batters")
-
-# ---- 3. Opponents ----
 opponents = sorted(df['opponent'].unique())
-opponent_filter = st.sidebar.multiselect("Opponents", opponents, key="global_opp")
-
-# ---- 4. Countries ----
 countries = sorted(df['country'].unique())
-country_filter = st.sidebar.multiselect("Host Countries", countries, key="global_country")
-
-# ---- 4b. Batting team (team_bat) ----
-batting_teams = []
-if 'team_bat' in df.columns:
-    batting_teams = sorted(df['team_bat'].unique())
-batting_team_filter = st.sidebar.multiselect("Batting Team", batting_teams, key="global_batting_team")
-
-# ---- 5. Innings Number ----
 innings_nums = sorted(df['inns_num'].unique())
-inns_filter = st.sidebar.multiselect("Innings Number", innings_nums, key="global_inns")
 
-# ---- 6. Position ---- (global)
 position_map = {
-    "Opener": 0,
-    "Number 3": 1,
-    "Number 4": 2,
-    "Number 5": 3,
-    "Number 6": 4,
-    "Number 7": 5,
-    "Number 8": 6,
-    "Number 9": 7,
-    "Number 10": 8,
-    "Number 11": 9,
+    "Opener": 0,  "Number 3": 1, "Number 4": 2, "Number 5": 3,
+    "Number 6": 4, "Number 7": 5, "Number 8": 6, "Number 9": 7,
+    "Number 10": 8, "Number 11": 9,
 }
-# allow selecting multiple positions for the summary filters (empty == all positions)
-position_choices = st.sidebar.multiselect(
-    "Batting Position (based on wickets fallen)",
-    list(position_map.keys()),
-    key="global_position"
-)
 
-# ---- 8. Conditional difficulty (summary) ----
-# Labelled in the UI as expected_RPI but maps to the `expected_avg` column in the data
 difficulty_options = [
     "hard (expected_RPI<30)",
     "moderate (30<=expected_RPI<50)",
-    "easy (50<=expected_RPI)"
+    "easy (50<=expected_RPI)",
 ]
-difficulty_choices = st.sidebar.multiselect(
-    "Conditional difficulty",
-    difficulty_options,
-    key="global_difficulty"
-)
-
-# ---- 7. Ranking Filters Section ----
-st.sidebar.markdown("---")
-st.sidebar.subheader("Ranking Filters")
-
-min_total_runs = st.sidebar.number_input(
-    "Minimum Total Actual Runs",
-    min_value=0,
-    max_value=20000,
-    value=5000,
-    step=100,
-    key="rank_minruns"
-)
-
-# Ranking filter selections
-rank_mapping_country = st.sidebar.multiselect(
-    "Host Country (Rankings)",
-    sorted(df["country"].unique()),
-    key="rank_country"
-)
-
-rank_mapping_opponent = st.sidebar.multiselect(
-    "Opponent (Rankings)",
-    sorted(df["opponent"].unique()),
-    key="rank_opp"
-)
-
-# Ranking batting team filter
-rank_mapping_batting_team = st.sidebar.multiselect(
-    "Batting Team (Rankings)",
-    sorted(df["team_bat"].unique()) if 'team_bat' in df.columns else [],
-    key="rank_batting_team"
-)
-
-# Ranking position filter uses same mapping as global
-rank_pos_strings = st.sidebar.multiselect(
-    "Batting Position (Rankings)",
-    list(position_map.keys()),
-    key="rank_pos"
-)
-rank_mapping_pos = [position_map[p] for p in rank_pos_strings]
-
-rank_mapping_inns = st.sidebar.multiselect(
-    "Innings Number (Rankings)",
-    sorted(df["inns_num"].unique()),
-    key="rank_inns"
-)
-
-# ---- Ranking conditional difficulty ----
-rank_mapping_difficulty = st.sidebar.multiselect(
-    "Conditional difficulty (Rankings)",
-    difficulty_options,
-    key="rank_difficulty"
-)
-
-rank_year_range = st.sidebar.slider(
-    "Rankings Year Range",
-    min_value=year_min,
-    max_value=year_max,
-    value=(year_min, year_max),
-    key="rank_year_range"
-)
-
-rank_basis = st.sidebar.selectbox(
-    "Rank By",
-    [
-        "Performance Factor (total actual runs / total expected runs)",
-        "Consistency Factor (good innings / bad innings)"
-    ],
-    key="rank_basis"
-)
 
 # =========================================================
-#                          TABS
+#       FILTERS FOR SUMMARY + COMPARISON MODES
 # =========================================================
-tab1, tab2, tab3 = st.tabs(["Batter Summary", "Rankings", "Info"])
+def summary_and_comparison_filters(prefix=""):
+    """Reusable filter blocks for Summary and Comparison tabs."""
+    yr = st.sidebar.slider(
+        f"{prefix}Year Range",
+        min_value=year_min, max_value=year_max,
+        value=(year_min, year_max),
+        key=f"{prefix}_year_range"
+    )
+    bt = st.sidebar.multiselect(f"{prefix}Batters", batters, key=f"{prefix}_batters")
+    opp = st.sidebar.multiselect(f"{prefix}Opponents", opponents, key=f"{prefix}_opp")
+    ct = st.sidebar.multiselect(f"{prefix}Host Countries", countries, key=f"{prefix}_ct")
+    inns = st.sidebar.multiselect(f"{prefix}Innings Number", innings_nums, key=f"{prefix}_inns")
+    pos = st.sidebar.multiselect(f"{prefix}Batting Position", list(position_map.keys()), key=f"{prefix}_pos")
+    cond = st.sidebar.multiselect(f"{prefix}Condition Difficulty", difficulty_options, key=f"{prefix}_diff")
+
+    team_bat = sorted(df["team_bat"].unique()) if "team_bat" in df.columns else []
+    tbat = st.sidebar.multiselect(f"{prefix}Batting Team", team_bat, key=f"{prefix}_team_bat")
+
+    return {
+        "year_range": yr,
+        "batters": bt,
+        "opponent": opp,
+        "country": ct,
+        "inns": inns,
+        "pos": pos,
+        "diff": cond,
+        "team_bat": tbat,
+    }
+
+# =========================================================
+#         FILTERS FOR COMPARISON MODE (new)
+# =========================================================
+def comparison_filters(prefix="cmp"):
+    st.sidebar.subheader("Comparison Filters")
+
+    # Multiple batters
+    batter_list = st.sidebar.multiselect("Select Batters to Compare", batters, key=f"{prefix}_batters")
+
+    yr = st.sidebar.slider(
+        "Comparison Year Range", year_min, year_max,
+        (year_min, year_max), key=f"{prefix}_year"
+    )
+
+    opp = st.sidebar.multiselect("Opponents", opponents, key=f"{prefix}_opp")
+    ct = st.sidebar.multiselect("Host Countries", countries, key=f"{prefix}_ct")
+    inns = st.sidebar.multiselect("Innings Number", innings_nums, key=f"{prefix}_inns")
+    pos = st.sidebar.multiselect("Batting Position", list(position_map.keys()), key=f"{prefix}_pos")
+    cond = st.sidebar.multiselect("Condition Difficulty", difficulty_options, key=f"{prefix}_diff")
+
+    # IMPORTANT → No batting team filter for comparison
+
+    return {
+        "batters": batter_list,
+        "year_range": yr,
+        "opp": opp,
+        "ct": ct,
+        "inns": inns,
+        "pos": pos,
+        "diff": cond,
+    }
+
+# =========================================================
+#        FILTERS FOR RANKINGS MODE (unchanged)
+# =========================================================
+def rankings_filters():
+    st.sidebar.subheader("Ranking Filters")
+    yr = st.sidebar.slider("Rankings Year Range", year_min, year_max, (year_min, year_max))
+    min_runs = st.sidebar.number_input("Minimum Total Actual Runs", min_value=0, value=5000)
+    ct = st.sidebar.multiselect("Host Country", countries)
+    opp = st.sidebar.multiselect("Opponent", opponents)
+    tbat = st.sidebar.multiselect("Batting Team", sorted(df["team_bat"].unique()))
+    pos = st.sidebar.multiselect("Batting Position", list(position_map.keys()))
+    inns = st.sidebar.multiselect("Innings Number", innings_nums)
+    diff = st.sidebar.multiselect("Condition Difficulty", difficulty_options)
+
+    basis = st.sidebar.selectbox(
+        "Rank By",
+        ["Performance Factor (total actual runs / total expected runs)",
+         "Consistency Factor (good innings / bad innings)"]
+    )
+
+    return {
+        "year_range": yr,
+        "min_runs": min_runs,
+        "ct": ct, "opp": opp, "tbat": tbat,
+        "pos": pos, "inns": inns, "diff": diff,
+        "basis": basis,
+    }
+
+# ---- Load Sidebar Filters Depending on Mode ----
+
+filters = None
+
+if mode == "Summary":
+    filters = summary_and_comparison_filters()
+
+elif mode == "Rankings":
+    filters = rankings_filters()
+
+elif mode == "Comparison":
+    filters = comparison_filters()
+
+# ---- Unpack filters depending on mode ----
+if mode == "Summary" and filters:
+    year_range = filters["year_range"]
+    batter_filter = filters["batters"]
+    opponent_filter = filters["opponent"]
+    country_filter = filters["country"]
+    inns_filter = filters["inns"]
+    position_choices = filters["pos"]
+    difficulty_choices = filters["diff"]
+    batting_team_filter = filters["team_bat"]
+
+elif mode == "Rankings" and filters:
+    rank_year_range = filters["year_range"]
+    min_total_runs = filters["min_runs"]
+    rank_mapping_country = filters["ct"]
+    rank_mapping_opponent = filters["opp"]
+    rank_mapping_batting_team = filters["tbat"]
+    rank_mapping_pos = filters["pos"]
+    rank_mapping_inns = filters["inns"]
+    rank_mapping_difficulty = filters["diff"]
+    rank_basis = filters["basis"]
+
+elif mode == "Comparison" and filters:
+    cmp_batters = filters["batters"]
+    cmp_year_range = filters["year_range"]
+    cmp_opp = filters["opp"]
+    cmp_ct = filters["ct"]
+    cmp_inns = filters["inns"]
+    cmp_pos = filters["pos"]
+    cmp_diff = filters["diff"]
+
+# ----------------------------
+# Ensure defaults for any missing filter variables
+# This prevents NameError when users navigate without selecting a mode
+# ----------------------------
+if 'year_range' not in globals():
+    year_range = (year_min, year_max)
+if 'batter_filter' not in globals():
+    batter_filter = []
+if 'opponent_filter' not in globals():
+    opponent_filter = []
+if 'country_filter' not in globals():
+    country_filter = []
+if 'inns_filter' not in globals():
+    inns_filter = []
+if 'position_choices' not in globals():
+    position_choices = []
+if 'difficulty_choices' not in globals():
+    difficulty_choices = []
+if 'batting_team_filter' not in globals():
+    batting_team_filter = []
+
+if 'rank_year_range' not in globals():
+    rank_year_range = (year_min, year_max)
+if 'min_total_runs' not in globals():
+    min_total_runs = 5000
+if 'rank_mapping_country' not in globals():
+    rank_mapping_country = []
+if 'rank_mapping_opponent' not in globals():
+    rank_mapping_opponent = []
+if 'rank_mapping_batting_team' not in globals():
+    rank_mapping_batting_team = []
+if 'rank_mapping_pos' not in globals():
+    rank_mapping_pos = []
+if 'rank_mapping_inns' not in globals():
+    rank_mapping_inns = []
+if 'rank_mapping_difficulty' not in globals():
+    rank_mapping_difficulty = []
+if 'rank_basis' not in globals():
+    rank_basis = "Performance Factor (total actual runs / total expected runs)"
+
+if 'cmp_batters' not in globals():
+    cmp_batters = []
+if 'cmp_year_range' not in globals():
+    cmp_year_range = (year_min, year_max)
+if 'cmp_opp' not in globals():
+    cmp_opp = []
+if 'cmp_ct' not in globals():
+    cmp_ct = []
+if 'cmp_inns' not in globals():
+    cmp_inns = []
+if 'cmp_pos' not in globals():
+    cmp_pos = []
+if 'cmp_diff' not in globals():
+    cmp_diff = []
+
+# =========================================================
+#                      TABS
+# =========================================================
+tab1, tab2, tab3, tab4 = st.tabs(["Batter Summary", "Rankings", "Comparison", "Info"])
+
 
 # =========================================================
 #                         TAB 1 — SUMMARY
@@ -243,7 +329,7 @@ with tab1:
             # ----------------------------
             # Year-by-year bar chart
             # ----------------------------
-            st.markdown("---")
+            st.markdown("### Actual vs Predicted Runs per Innings (Yearly)")
             chart_src = filtered[[actual_col, 'expected_avg', 'year']].copy()
             chart_src.rename(columns={actual_col: 'actual'}, inplace=True)
             year_agg = chart_src.groupby("year").mean().reset_index()
@@ -270,6 +356,60 @@ with tab1:
 
             st.altair_chart(bar, use_container_width=True)
 
+            
+
+            # =========================================================
+#   PERFORMANCE FACTOR PDF (per-innings distribution)
+# =========================================================
+
+            st.markdown("### Innings Performance Factor Distribution")
+            st.caption("Performance Factor = actual runs / predicted runs")
+
+            # Compute per-innings PF
+            pf_df = filtered.copy()
+            pf_df["pf"] = pf_df[actual_col] / pf_df["expected_avg"]
+
+            # Kernel Density Estimation for smooth PDF
+            pdf_chart = (
+                alt.Chart(pf_df)
+                .transform_density(
+                    "pf",
+                    as_=["pf", "density"],
+                    extent=[0, max(3, pf_df["pf"].max())],   # ensure full range
+                    steps=200
+                )
+                .mark_area(opacity=0.45)
+                .encode(
+                    x=alt.X("pf:Q", title="Performance Factor (actual / predicted)"),
+                    y=alt.Y("density:Q", title="Probability Density"),
+                    tooltip=["pf:Q", "density:Q"]
+                )
+                .properties(height=300)
+            )
+
+            # Vertical markers
+            vlines = alt.Chart(pd.DataFrame({
+                "x": [0, 0.5, 1, 2, 3],
+                "label": ["duck", "poor", "average", "good", "exceptional"]
+            })).mark_rule(color="red").encode(
+                x="x:Q",
+                tooltip=["label", "x:Q"]
+            )
+
+            text_labels = alt.Chart(pd.DataFrame({
+                "x": [0, 0.5, 1, 2, 3],
+                "y": [0]*5,
+                "label": ["duck", "poor", "average", "good", "exceptional"]
+            })).mark_text(
+                dy=-5, color="red", fontSize=12
+            ).encode(
+                x="x:Q",
+                y=alt.value(0),
+                text="label:N"
+            )
+
+            # Combine PDF + vertical markers
+            st.altair_chart(pdf_chart + vlines + text_labels, use_container_width=True)
             # Expander to show filtered dataframe
             with st.expander("Show Filtered Data"):
                 st.dataframe(filtered)
@@ -365,7 +505,169 @@ with tab2:
         else:
             st.dataframe(rank_table.reset_index(drop=True))
 
+# =========================================================
+#                         TAB 3 — COMPARISON
+# =========================================================
 with tab3:
+    st.header("Compare Multiple Batters")
+
+    if st.button("Generate Comparison"):
+        if not cmp_batters:
+            st.warning("Please select at least one batter to compare.")
+        else:
+            st.subheader(f"Comparing: {', '.join(cmp_batters)}")
+            
+            # Apply filters function
+            def apply_filters(sub_df, name):
+                df2 = sub_df.copy()
+                df2 = df2[(df2["bat"] == name)]
+                df2 = df2[
+                    (df2["year"] >= cmp_year_range[0]) &
+                    (df2["year"] <= cmp_year_range[1])
+                ]
+
+                if cmp_opp:
+                    df2 = df2[df2["opponent"].isin(cmp_opp)]
+                if cmp_ct:
+                    df2 = df2[df2["country"].isin(cmp_ct)]
+                if cmp_inns:
+                    df2 = df2[df2["inns_num"].isin(cmp_inns)]
+                if cmp_pos:
+                    wicket_vals = [position_map[p] for p in cmp_pos]
+                    df2 = df2[df2["wickets_when_in"].isin(wicket_vals)]
+
+                # difficulty filter (expected_avg)
+                if cmp_diff and "expected_avg" in df2.columns:
+                    mask = pd.Series(False, index=df2.index)
+                    lower = [c.lower() for c in cmp_diff]
+                    if any("hard" in c for c in lower):
+                        mask |= (df2["expected_avg"] < 30)
+                    if any("moderate" in c for c in lower):
+                        mask |= ((df2["expected_avg"] >= 30) & (df2["expected_avg"] < 50))
+                    if any("easy" in c for c in lower):
+                        mask |= (df2["expected_avg"] >= 50)
+                    df2 = df2[mask]
+
+                return df2
+
+            # Apply filters to all selected batters
+            filtered_dfs = {batter: apply_filters(df, batter) for batter in cmp_batters}
+            
+            # Check if any batter has data
+            if all(v.empty for v in filtered_dfs.values()):
+                st.warning("No data found for selected batters with these filters.")
+            else:
+                # Determine actual runs column
+                def get_actual(df_x):
+                    if "actual_runs" in df_x.columns: return "actual_runs"
+                    if "y" in df_x.columns: return "y"
+                    return [c for c in df_x.columns if "run" in c.lower()][0]
+
+                act_col = get_actual(df)
+
+                # Compute metrics for all batters
+                def overall_metrics(df_x, act_col):
+                    if df_x.empty:
+                        return {
+                            "performance_factor": float("nan"),
+                            "consistency_factor": float("nan")
+                        }
+                    total_actual = df_x[act_col].sum()
+                    total_expected = df_x["expected_avg"].sum() if "expected_avg" in df_x.columns else 0
+                    pf = (total_actual / total_expected) if total_expected else float("nan")
+                    good = int((df_x[act_col] > df_x["expected_avg"]).sum()) if "expected_avg" in df_x.columns else 0
+                    bad = int((df_x[act_col] <= df_x["expected_avg"]).sum()) if "expected_avg" in df_x.columns else 0
+                    cons = (good / bad) if bad > 0 else float("inf")
+                    return {
+                        "performance_factor": round(pf, 3) if not pd.isna(pf) else float("nan"),
+                        "consistency_factor": round(cons, 3) if cons != float("inf") else float("inf")
+                    }
+
+                # Build comparison table
+                metrics_list = []
+                for batter in cmp_batters:
+                    metrics = overall_metrics(filtered_dfs[batter], act_col)
+                    metrics_list.append({
+                        "Batter": batter,
+                        "Performance Factor": metrics["performance_factor"],
+                        "Consistency Factor": metrics["consistency_factor"]
+                    })
+                
+                metrics_df = pd.DataFrame(metrics_list)
+                st.subheader("Comparison Table")
+                st.dataframe(metrics_df, use_container_width=True)
+
+                # Yearly Performance Factor line chart
+                def per_innings_pf(df_x, act_col):
+                    if df_x.empty:
+                        return pd.DataFrame()
+                    d = df_x[df_x['expected_avg'] > 0].copy()
+                    d = d.assign(pf=(d[act_col] / d['expected_avg']))
+                    return d
+
+                year_dfs = []
+                for batter in cmp_batters:
+                    pf_data = per_innings_pf(filtered_dfs[batter], act_col)
+                    if not pf_data.empty:
+                        year_agg = pf_data.groupby('year')['pf'].mean().reset_index().assign(bat=batter)
+                        year_dfs.append(year_agg)
+                
+                if year_dfs:
+                    year_df = pd.concat(year_dfs, ignore_index=True)
+                    
+                    year_chart = alt.Chart(year_df).mark_line(point=True).encode(
+                        x=alt.X('year:O', title='Year'),
+                        y=alt.Y('pf:Q', title='Mean Performance Factor'),
+                        color=alt.Color('bat:N'),
+                        tooltip=[alt.Tooltip('bat:N'), alt.Tooltip('year:O'), alt.Tooltip('pf:Q', format='.3f')]
+                    ).properties(title='Yearly Performance Factor — All Batters')
+
+                    st.altair_chart(year_chart, use_container_width=True)
+
+                    # PDF (density) of per-innings Performance Factor — one plot per batter
+                    pf_dfs = []
+                    for batter in cmp_batters:
+                        pf_data = per_innings_pf(filtered_dfs[batter], act_col)
+                        if not pf_data.empty:
+                            pf_dfs.append(pf_data.assign(bat=batter))
+                    
+                    if pf_dfs:
+                        pf_comb = pd.concat(pf_dfs, ignore_index=True)
+                        pf_min = pf_comb['pf'].min()
+                        pf_max = max(3, pf_comb['pf'].max())
+                        
+                        # Create separate density plot for each batter (stacked vertically)
+                        for idx, batter in enumerate(cmp_batters):
+                            batter_data = pf_comb[pf_comb['bat'] == batter]
+                            if not batter_data.empty and len(batter_data) > 1:
+                                # Use Altair's tableau10 color scheme (same as yearly PF)
+                                color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+                                batter_color = color_palette[idx % len(color_palette)]
+                                
+                                density = alt.Chart(batter_data).transform_density(
+                                    'pf',
+                                    as_=['pf', 'density'],
+                                    extent=[pf_min, pf_max],
+                                    steps=200
+                                ).mark_area(opacity=0.6, color=batter_color).encode(
+                                    x=alt.X('pf:Q', title='Performance Factor (actual / predicted)'),
+                                    y=alt.Y('density:Q', title='Density'),
+                                    tooltip=['pf:Q', 'density:Q']
+                                ).properties(
+                                    title=f'PDF — {batter}',
+                                    height=200
+                                )
+                                
+                                st.altair_chart(density, use_container_width=True)
+
+                # Show raw data if requested
+                with st.expander("Show DataFrames Used"):
+                    for batter in cmp_batters:
+                        if not filtered_dfs[batter].empty:
+                            st.write(f"Data for {batter}")
+                            st.dataframe(filtered_dfs[batter])
+
+with tab4:
     st.header("About the Model and Metrics")
 
     st.markdown("""
@@ -402,5 +704,3 @@ with tab3:
 
     
     """)
-
-
