@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from scipy import stats
 
 # ----------------------------
 # LOAD DATA
@@ -11,6 +12,30 @@ df = pd.read_csv(DATA_PATH)
 # Set page config
 st.set_page_config(page_title="Test Batter Performance Judge", layout="wide")
 st.title("Test Batter Performance Judge")
+
+# Helper function to calculate probabilities for PF ranges
+def calculate_pf_probabilities(pf_series):
+    """Calculate probability of PF falling in different ranges."""
+    if len(pf_series) < 2:
+        return {}
+    
+    # Define boundaries
+    boundaries = [0, 0.5, 1.0, 2.0, 3.0, float('inf')]
+    labels = ['duck', 'poor', 'average', 'good', 'exceptional', 'exceptional+']
+    
+    probs = {}
+    for i in range(len(boundaries) - 1):
+        lower = boundaries[i]
+        upper = boundaries[i + 1]
+        if upper == float('inf'):
+            count = (pf_series >= lower).sum()
+        else:
+            count = ((pf_series >= lower) & (pf_series < upper)).sum()
+        prob = (count / len(pf_series)) * 100
+        range_label = f"{labels[i]} to {labels[i+1]}" if i < len(labels) - 1 else f"{labels[i]}+"
+        probs[range_label] = prob
+    
+    return probs
 
 # =========================================================
 #                GLOBAL SIDEBAR (common for both tabs)
@@ -117,19 +142,20 @@ def comparison_filters(prefix="cmp"):
 # =========================================================
 def rankings_filters():
     st.sidebar.subheader("Ranking Filters")
-    yr = st.sidebar.slider("Rankings Year Range", year_min, year_max, (year_min, year_max))
+    yr = st.sidebar.slider("Rankings Year Range", year_min, year_max, (year_min, year_max), key="rank_year")
     min_runs = st.sidebar.number_input("Minimum Total Actual Runs", min_value=0, value=5000)
-    ct = st.sidebar.multiselect("Host Country", countries)
-    opp = st.sidebar.multiselect("Opponent", opponents)
-    tbat = st.sidebar.multiselect("Batting Team", sorted(df["team_bat"].unique()))
-    pos = st.sidebar.multiselect("Batting Position", list(position_map.keys()))
-    inns = st.sidebar.multiselect("Innings Number", innings_nums)
-    diff = st.sidebar.multiselect("Condition Difficulty", difficulty_options)
+    ct = st.sidebar.multiselect("Host Country", countries, key="rank_country")
+    opp = st.sidebar.multiselect("Opponent", opponents, key="rank_opp")
+    tbat = st.sidebar.multiselect("Batting Team", sorted(df["team_bat"].unique()), key="rank_team")
+    pos = st.sidebar.multiselect("Batting Position", list(position_map.keys()), key="rank_pos")
+    inns = st.sidebar.multiselect("Innings Number", innings_nums, key="rank_inns")
+    diff = st.sidebar.multiselect("Condition Difficulty", difficulty_options, key="rank_diff")
 
     basis = st.sidebar.selectbox(
         "Rank By",
         ["Performance Factor (total actual runs / total expected runs)",
-         "Consistency Factor (good innings / bad innings)"]
+         "Consistency Factor (good innings / bad innings)"],
+        key="rank_basis"
     )
 
     return {
@@ -356,11 +382,9 @@ with tab1:
 
             st.altair_chart(bar, use_container_width=True)
 
-            
-
             # =========================================================
-#   PERFORMANCE FACTOR PDF (per-innings distribution)
-# =========================================================
+            #   PERFORMANCE FACTOR PDF (per-innings distribution)
+            # =========================================================
 
             st.markdown("### Innings Performance Factor Distribution")
             st.caption("Performance Factor = actual runs / predicted runs")
@@ -368,6 +392,17 @@ with tab1:
             # Compute per-innings PF
             pf_df = filtered.copy()
             pf_df["pf"] = pf_df[actual_col] / pf_df["expected_avg"]
+
+            # Calculate probabilities
+            pf_probs = calculate_pf_probabilities(pf_df["pf"])
+            
+            # Display probabilities in columns
+            if pf_probs:
+                st.subheader("Probability Ranges")
+                cols = st.columns(len(pf_probs))
+                for col, (range_name, prob) in zip(cols, pf_probs.items()):
+                    with col:
+                        st.metric(range_name, f"{prob:.1f}%")
 
             # Kernel Density Estimation for smooth PDF
             pdf_chart = (
@@ -410,6 +445,7 @@ with tab1:
 
             # Combine PDF + vertical markers
             st.altair_chart(pdf_chart + vlines + text_labels, use_container_width=True)
+            
             # Expander to show filtered dataframe
             with st.expander("Show Filtered Data"):
                 st.dataframe(filtered)
@@ -435,7 +471,6 @@ with tab2:
             rdf = rdf[rdf["opponent"].isin(rank_mapping_opponent)]
         if rank_mapping_pos:
             wicket_vals = [position_map[p] for p in rank_mapping_pos]
-            print(wicket_vals)
             rdf = rdf[rdf["wickets_when_in"].isin(wicket_vals)]
         if rank_mapping_batting_team:
             if 'team_bat' in rdf.columns:
@@ -626,7 +661,7 @@ with tab3:
 
                     st.altair_chart(year_chart, use_container_width=True)
 
-                    # PDF (density) of per-innings Performance Factor — one plot per batter
+                    # PDF (density) of per-innings Performance Factor — one plot per batter with probabilities
                     pf_dfs = []
                     for batter in cmp_batters:
                         pf_data = per_innings_pf(filtered_dfs[batter], act_col)
@@ -646,6 +681,9 @@ with tab3:
                                 color_palette = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
                                 batter_color = color_palette[idx % len(color_palette)]
                                 
+                                # Calculate probabilities for this batter
+                                batter_probs = calculate_pf_probabilities(batter_data['pf'])
+                                
                                 density = alt.Chart(batter_data).transform_density(
                                     'pf',
                                     as_=['pf', 'density'],
@@ -660,7 +698,16 @@ with tab3:
                                     height=200
                                 )
                                 
-                                st.altair_chart(density, use_container_width=True)
+                                
+                                
+                                # Show probabilities for this batter
+                                if batter_probs:
+                                    st.markdown(f"**{batter} — Probability Ranges:**")
+                                    prob_cols = st.columns(len(batter_probs))
+                                    for col, (range_name, prob) in zip(prob_cols, batter_probs.items()):
+                                        with col:
+                                            st.metric(range_name, f"{prob:.1f}%")
+                                st.altair_chart(density, use_container_width=True)            
 
                 # Show raw data if requested
                 with st.expander("Show DataFrames Used"):
@@ -686,9 +733,9 @@ with tab4:
     - Read more: [Context is King — Substack](https://arnavj.substack.com/p/context-is-king)
                 
     ### Contextual Notes:
-    - It’s impossible for a human mind to consider and evaluate all factors affecting a Test match knock simultaneously.
+    - It's impossible for a human mind to consider and evaluate all factors affecting a Test match knock simultaneously.
     - Even judging batters within the same generation is difficult, let alone across eras.
-    - ML helps provide a more context-aware evaluation by comparing actual runs with the model’s expected runs.            
+    - ML helps provide a more context-aware evaluation by comparing actual runs with the model's expected runs.            
 
     ### Model Features:
     - Opponent
