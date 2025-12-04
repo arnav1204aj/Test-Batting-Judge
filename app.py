@@ -434,7 +434,9 @@ with tab2:
         if rank_mapping_opponent:
             rdf = rdf[rdf["opponent"].isin(rank_mapping_opponent)]
         if rank_mapping_pos:
-            rdf = rdf[rdf["wickets_when_in"].isin(rank_mapping_pos)]
+            wicket_vals = [position_map[p] for p in rank_mapping_pos]
+            print(wicket_vals)
+            rdf = rdf[rdf["wickets_when_in"].isin(wicket_vals)]
         if rank_mapping_batting_team:
             if 'team_bat' in rdf.columns:
                 rdf = rdf[rdf["team_bat"].isin(rank_mapping_batting_team)]
