@@ -142,7 +142,7 @@ bowlers = sorted(df_bowling['bowl'].unique()) if 'bowl' in df_bowling.columns el
 opponents_bowl = sorted(df_bowling['team_bat'].unique()) if 'team_bat' in df_bowling.columns else []
 countries_bowl = sorted(df_bowling['country'].unique()) if 'country' in df_bowling.columns else []
 team_bowl = sorted(df_bowling["team_bowl"].unique()) if "team_bowl" in df_bowling.columns else []
-
+b_kinds = sorted(df_bowling["bowl_kind"].unique()) if "bowl_kind" in df_bowling.columns else []
 position_map = {
     "Opener": 0,  "Number 3": 1, "Number 4": 2, "Number 5": 3,
     "Number 6": 4, "Number 7": 5, "Number 8": 6, "Number 9": 7,
@@ -213,6 +213,8 @@ def bowling_summary_and_comparison_filters(prefix=""):
     
     
     tbowl = st.sidebar.multiselect(f"{prefix}Bowler Team", team_bowl, key=f"{prefix}_team_bowl")
+    bowl_kind = st.sidebar.multiselect(f"{prefix}Bowler Kind", b_kinds, key=f"{prefix}_bowl_kind")
+    
 
     return {
         "year_range": yr,
@@ -221,6 +223,7 @@ def bowling_summary_and_comparison_filters(prefix=""):
         "country": ct,
         "inns": inns,
         "team_bowl": tbowl,
+        "b_kind": bowl_kind
     }
 
 # =========================================================
@@ -323,6 +326,7 @@ def bowling_rankings_filters():
     opp = st.sidebar.multiselect("Opponent", opponents_bowl, key="rank_opp_bowl")
     tbowl = st.sidebar.multiselect("Bowler Team", team_bowl, key="rank_team_bowl")
     inns = st.sidebar.multiselect("Innings Number", innings_nums, key="rank_inns_bowl")
+    bowl_kind = st.sidebar.multiselect(f"Bowler Kind", b_kinds, key=f"rank_bowl_kind")
     
     basis = st.sidebar.selectbox(
         "Rank By",
@@ -337,6 +341,7 @@ def bowling_rankings_filters():
         "ct": ct, "opp": opp, "tbowl": tbowl,
         "inns": inns,
         "basis": basis,
+        "b_kind": bowl_kind
     }
 
 # ---- Load Sidebar Filters Depending on Mode ----
@@ -398,6 +403,7 @@ else:  # Bowling
         country_filter_bowl = filters["country"]
         inns_filter_bowl = filters["inns"]
         bowling_team_filter = filters["team_bowl"]
+        bowl_kind_filter = filters['b_kind']
 
     elif mode == "Rankings" and filters:
         rank_year_range_bowl = filters["year_range"]
@@ -408,6 +414,7 @@ else:  # Bowling
         rank_mapping_bowling_team = filters["tbowl"]
         rank_mapping_inns_bowl = filters["inns"]
         rank_basis_bowl = filters["basis"]
+        rank_bowl_kind_filter = filters['b_kind']
 
     elif mode == "Comparison" and filters:
         cmp_bowlers = filters["bowlers"]
@@ -456,6 +463,8 @@ if 'rank_mapping_difficulty' not in globals():
     rank_mapping_difficulty = []
 if 'rank_basis' not in globals():
     rank_basis = "Performance Factor (total actual runs / total expected runs)"
+if  'rank_bowl_kind_filter' not in globals():
+    rank_bowl_kind_filter = []  
 
 if 'cmp_batters' not in globals():
     cmp_batters = []
@@ -485,6 +494,8 @@ if 'inns_filter_bowl' not in globals():
     inns_filter_bowl = []
 if 'bowling_team_filter' not in globals():
     bowling_team_filter = []
+if  'bowl_kind_filter' not in globals():
+    bowl_kind_filter = []      
 
 if 'rank_year_range_bowl' not in globals():
     rank_year_range_bowl = (year_min, year_max)
@@ -723,6 +734,8 @@ with tab1:
                 filtered_bowl = filtered_bowl[filtered_bowl['inns'].isin(inns_filter_bowl)]
             if bowling_team_filter:
                 filtered_bowl = filtered_bowl[filtered_bowl['team_bowl'].isin(bowling_team_filter)]
+            if bowl_kind_filter:
+                filtered_bowl = filtered_bowl[filtered_bowl['bowl_kind'].isin(bowl_kind_filter)]   
             
             if filtered_bowl.empty:
                 st.warning("No data matches the filters.")
@@ -1215,6 +1228,8 @@ with tab3:
                 rdf_bowl = rdf_bowl[rdf_bowl['team_bowl'].isin(rank_mapping_bowling_team)]
             if rank_mapping_inns_bowl:
                 rdf_bowl = rdf_bowl[rdf_bowl['inns'].isin(rank_mapping_inns_bowl)]
+            if rank_bowl_kind_filter:
+                rdf_bowl = rdf_bowl[rdf_bowl['bowl_kind'].isin(rank_bowl_kind_filter)]     
             
             if rdf_bowl.empty:
                 st.warning("No bowler matches the ranking filters.")
